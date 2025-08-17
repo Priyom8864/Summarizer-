@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Meeting Notes Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar for better aesthetics */
+        textarea::-webkit-scrollbar, #summary-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track, #summary-output::-webkit-scrollbar-track {
+            background: #2d3748; /* gray-800 */
+        }
+        textarea::-webkit-scrollbar-thumb, #summary-output::-webkit-scrollbar-thumb {
+            background: #4a5568; /* gray-600 */
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover, #summary-output::-webkit-scrollbar-thumb:hover {
+            background: #718096; /* gray-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-100">AI Meeting Notes Summarizer</h1>
+            <p class="text-gray-400 mt-2">Priyom Kataria</p>
+        </div>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Left Column: Input -->
+            <div class="space-y-6">
+                <div>
+                    <label for="transcript-input" class="block text-sm font-medium text-gray-300 mb-2">1. Paste Meeting Transcript</label>
+                    <textarea id="transcript-input" rows="12" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200" placeholder="Paste your raw meeting notes or transcript here..."></textarea>
+                </div>
+                <div>
+                    <label for="prompt-input" class="block text-sm font-medium text-gray-300 mb-2">2. Enter Custom Instruction</label>
+                    <input type="text" id="prompt-input" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200" placeholder="e.g., Summarize in bullet points for executives">
+                </div>
+                <button id="generate-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition duration-200">
+                    <svg id="button-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v1h-2V4H7v1H5V4zM5 7h10v9a2 2 0 01-2 2H7a2 2 0 01-2-2V7z" />
+                        <path d="M10 11a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1z" />
+                    </svg>
+                    <span id="button-text">Generate Summary</span>
+                    <div id="loader" class="loader hidden ml-2"></div>
+                </button>
+            </div>
+
+            <!-- Right Column: Output -->
+            <div class="space-y-6">
+                <div>
+                    <label for="summary-output" class="block text-sm font-medium text-gray-300 mb-2">3. Generated Summary (Editable)</label>
+                    <div id="summary-output" contenteditable="true" class="w-full h-80 p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200 overflow-y-auto">
+                        <p class="text-gray-500">Your summary will appear here...</p>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                     <label for="email-input" class="block text-sm font-medium text-gray-300">4. Share via Email</label>
+                    <input type="email" id="email-input" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200" placeholder="recipient1@example.com, recipient2@example.com">
+                    <button id="share-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                            <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                        </svg>
+                        Share Summary
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Message Box -->
+        <div id="message-box" class="hidden fixed top-5 right-5 bg-red-500 text-white py-2 px-4 rounded-lg shadow-lg transition-opacity duration-300">
+            <p id="message-text"></p>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const transcriptInput = document.getElementById('transcript-input');
+        const promptInput = document.getElementById('prompt-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const summaryOutput = document.getElementById('summary-output');
+        const emailInput = document.getElementById('email-input');
+        const shareBtn = document.getElementById('share-btn');
+        const loader = document.getElementById('loader');
+        const buttonText = document.getElementById('button-text');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+
+        // --- Configuration ---
+        const apiKey = ""; // Leave empty, it will be handled by the environment
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        // --- Functions ---
+
+        /**
+         * Shows a message to the user.
+         * @param {string} message - The message to display.
+         * @param {boolean} isError - If true, displays a red error message.
+         */
+        function showMessage(message, isError = true) {
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-red-500', 'bg-green-500');
+            messageBox.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 3000);
+        }
+
+        /**
+         * Toggles the loading state of the generate button.
+         * @param {boolean} isLoading - The loading state.
+         */
+        function setLoading(isLoading) {
+            if (isLoading) {
+                loader.classList.remove('hidden');
+                buttonText.textContent = 'Generating...';
+                generateBtn.disabled = true;
+                generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                loader.classList.add('hidden');
+                buttonText.textContent = 'Generate Summary';
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Fetches the summary from the AI model with exponential backoff.
+         * @param {string} fullPrompt - The complete prompt for the AI.
+         * @param {number} retries - The number of retries left.
+         * @param {number} delay - The current delay in ms.
+         */
+        async function fetchWithBackoff(fullPrompt, retries = 5, delay = 1000) {
+            try {
+                const chatHistory = [{ role: "user", parts: [{ text: fullPrompt }] }];
+                const payload = { contents: chatHistory };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    // If the response is not OK, but it's a server error, we might want to retry.
+                    if (response.status >= 500 && retries > 0) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                    // For client errors or final retry failure, parse the error message.
+                    const errorData = await response.json();
+                    const errorMessage = errorData?.error?.message || `HTTP error! status: ${response.status}`;
+                    throw new Error(errorMessage);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    
+                    const summaryText = result.candidates[0].content.parts[0].text;
+                    // Basic conversion of Markdown-like syntax to HTML for better display
+                    let htmlSummary = summaryText
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')       // Italics
+                        .replace(/^- (.*$)/gm, '<ul><li>$1</li></ul>') // Unordered list items
+                        .replace(/<\/ul>\n<ul>/g, '') // Merge consecutive lists
+                        .replace(/\n/g, '<br>'); // Newlines
+                    
+                    summaryOutput.innerHTML = htmlSummary;
+                } else {
+                    throw new Error("Invalid response structure from AI.");
+                }
+
+            } catch (error) {
+                console.error('API call failed:', error);
+                if (retries > 0) {
+                    console.log(`Retrying in ${delay / 1000}s... (${retries} retries left)`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchWithBackoff(fullPrompt, retries - 1, delay * 2);
+                } else {
+                    summaryOutput.innerHTML = `<p class="text-red-400">Failed to generate summary after multiple retries. Error: ${error.message}</p>`;
+                }
+            }
+        }
+
+        /**
+         * Handles the click event for the "Generate Summary" button.
+         */
+        async function handleGenerateClick() {
+            const transcript = transcriptInput.value.trim();
+            const prompt = promptInput.value.trim();
+
+            if (!transcript) {
+                showMessage("Please paste a transcript first.");
+                return;
+            }
+            if (!prompt) {
+                showMessage("Please provide an instruction/prompt.");
+                return;
+            }
+
+            setLoading(true);
+            summaryOutput.innerHTML = '<p class="text-gray-500">Generating your summary, please wait...</p>';
+
+            const fullPrompt = `
+                INSTRUCTION: ${prompt}
+
+                TRANSCRIPT:
+                ---
+                ${transcript}
+                ---
+
+                Based on the instruction, process the transcript provided.
+            `;
+            
+            await fetchWithBackoff(fullPrompt);
+
+            setLoading(false);
+        }
+
+        /**
+         * Handles the click event for the "Share via Email" button.
+         */
+        function handleShareClick() {
+            const emails = emailInput.value.trim();
+            const summaryText = summaryOutput.innerText.trim();
+
+            if (!emails) {
+                showMessage("Please enter at least one recipient email.");
+                return;
+            }
+            if (!summaryText || summaryOutput.textContent.includes("Your summary will appear here...")) {
+                showMessage("Please generate a summary before sharing.");
+                return;
+            }
+
+            const subject = "Meeting Notes Summary";
+            const body = encodeURIComponent(`Here is the meeting summary:\n\n${summaryText}`);
+            const mailtoLink = `mailto:${emails}?subject=${subject}&body=${body}`;
+
+            window.location.href = mailtoLink;
+        }
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', handleGenerateClick);
+        shareBtn.addEventListener('click', handleShareClick);
+
+    </script>
+</body>
+</html>
